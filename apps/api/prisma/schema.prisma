@@ -1,0 +1,802 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  twoFactor   TwoFactor?
+  auditLogs   AuditLog[]
+  subscriptions Subscription[]
+  payments   Payment[]
+  usages     Usage[]
+  addonPurchases AddonPurchase[]
+  reseller   Reseller?
+
+  @@map("users")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  gstin     String?  @unique
+  pan       String?  @unique
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  invoices     Invoice[]
+  expenses     Expense[]
+  employees    Employee[]
+  transactions Transaction[]
+  ledgerEntries LedgerEntry[]
+  financialReports FinancialReport[]
+  auditLogs   AuditLog[]
+  products    Product[]
+  vendors     Vendor[]
+  purchaseOrders PurchaseOrder[]
+  subscriptions Subscription[]
+
+  @@map("companies")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships Membership[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  roleId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("memberships")
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  companyId      String
+  invoiceNumber  String   @unique
+  customerName   String
+  customerGSTIN  String?
+  subtotal       Float    @default(0)
+  totalGST       Float    @default(0)
+  totalAmount    Float    @default(0)
+  status         String   @default("draft") // draft, finalized, paid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items   InvoiceItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  hsnCode     String?
+  quantity    Float
+  rate        Float
+  amount      Float
+  gstRate     Float
+  cgst        Float   @default(0)
+  sgst        Float   @default(0)
+  igst        Float   @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  companyId   String
+  date        DateTime
+  description String
+  category    String   // e.g., "Office Supplies", "Travel", "Utilities", etc.
+  amount      Float
+  gstAmount   Float     @default(0)
+  totalAmount Float
+  paymentMethod String  @default("cash") // cash, bank, card, etc.
+  reference   String?  // receipt number, transaction ID, etc.
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+// HR & Payroll Models
+model Employee {
+  id            String   @id @default(cuid())
+  companyId     String
+  employeeId    String?  @unique // Custom employee ID like "EMP001"
+  name          String
+  phone         String?
+  email         String?
+  role          String   // Job title/position
+  department    String?
+  salary        Float    // Monthly basic salary
+  joinDate      DateTime
+  active        Boolean  @default(true)
+  bankAccount   String?  // For salary transfers
+  bankName      String?
+  ifscCode      String?
+  panNumber     String?
+  aadhaarNumber String?
+  address       String?
+  emergencyContact String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  attendance  Attendance[]
+  payrolls    Payroll[]
+  advances    Advance[]
+  leaves      Leave[]
+  incentives  Incentive[]
+  complianceRecords ComplianceRecord[]
+
+  @@map("employees")
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime
+  status     String   // Present, Absent, Half, Leave, Holiday
+  checkIn    DateTime?
+  checkOut   DateTime?
+  hoursWorked Float?  // Calculated working hours
+  overtime   Float    @default(0) // Overtime hours
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@map("attendance")
+}
+
+model Payroll {
+  id            String   @id @default(cuid())
+  employeeId    String
+  month         Int      // 1-12
+  year          Int
+  basicSalary   Float
+  hra           Float    @default(0) // House Rent Allowance
+  conveyance    Float    @default(0) // Conveyance Allowance
+  lta           Float    @default(0) // Leave Travel Allowance
+  overtime      Float    @default(0)
+  bonus         Float    @default(0)
+  deductions    Float    @default(0) // Total deductions
+  pf            Float    @default(0) // Provident Fund
+  esi           Float    @default(0) // Employee State Insurance
+  tds           Float    @default(0) // Tax Deducted at Source
+  advances      Float    @default(0) // Salary advances deducted
+  netPay        Float
+  paid          Boolean  @default(false)
+  paymentDate   DateTime?
+  paymentMethod String?  // UPI, Bank Transfer, Cash
+  transactionId String?
+  payslipUrl    String?  // URL to generated payslip PDF
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, month, year])
+  @@map("payrolls")
+}
+
+model Advance {
+  id          String   @id @default(cuid())
+  employeeId  String
+  amount      Float
+  reason      String?
+  approved    Boolean  @default(false)
+  approvedBy  String?  // User ID who approved
+  approvedAt  DateTime?
+  deducted    Boolean  @default(false) // Whether deducted from salary
+  deductedInMonth Int? // Month when deducted
+  deductedInYear  Int? // Year when deducted
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("advances")
+}
+
+// Financial Ledger Models
+model Transaction {
+  id          String   @id @default(cuid())
+  companyId   String
+  type        String   // "income", "expense", "transfer"
+  amount      Float
+  description String
+  category    String?  // Auto-categorized by AI
+  paymentMethod String @default("cash") // cash, bank, upi, card
+  reference   String?  // Transaction ID, receipt number
+  vendor      String?  // For recurring payments
+  date        DateTime @default(now())
+  source      String   // "manual", "upi", "bank_import", "invoice"
+  metadata    Json?    // Additional data like UPI ID, bank details
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+
+  @@map("transactions")
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  companyId   String
+  transactionId String?
+  date        DateTime @default(now())
+  account     String   // e.g. "Cash", "Sales", "Expense", "Bank Account"
+  accountType String   // "asset", "liability", "equity", "income", "expense"
+  debit       Float    @default(0)
+  credit      Float    @default(0)
+  description String
+  refType     String?  // "invoice", "expense", "salary", "upi", "bank"
+  refId       String?
+  balance     Float    @default(0) // Running balance for the account
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@map("ledger_entries")
+}
+
+// Financial Reports Cache
+model FinancialReport {
+  id        String   @id @default(cuid())
+  companyId String
+  type      String   // "profit_loss", "balance_sheet", "cash_flow"
+  period    String   // "monthly", "quarterly", "yearly"
+  year      Int
+  month     Int?     // For monthly reports
+  quarter   Int?     // For quarterly reports
+  data      Json     // Cached report data
+  generatedAt DateTime @default(now())
+  expiresAt DateTime // When to regenerate
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, type, period, year, month])
+  @@unique([companyId, type, period, year, quarter])
+  @@map("financial_reports")
+}
+
+// Security & Admin Models
+model TwoFactor {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  type        String   // "totp", "sms", "email"
+  secret      String?  // For TOTP
+  backupCodes String[] // Encrypted backup codes
+  verified    Boolean  @default(false)
+  enabled     Boolean  @default(false)
+  phoneNumber String?  // For SMS 2FA
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factor")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  companyId   String?
+  action      String   // "create", "update", "delete", "login", "logout", "view"
+  resource    String   // "user", "company", "invoice", "expense", etc.
+  resourceId  String?
+  details     Json?    // Additional context about the action
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  success     Boolean  @default(true)
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  module      String   // "users", "companies", "invoices", "expenses", "reports", etc.
+  action      String   // "create", "read", "update", "delete", "manage"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  filename    String
+  size        BigInt
+  checksum    String
+  status      String   // "pending", "in_progress", "completed", "failed"
+  type        String   // "full", "incremental"
+  location    String   // S3 URL or local path
+  encrypted   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  error       String?
+
+  @@map("backups")
+}
+
+// Enhanced HR & Payroll Models
+model Leave {
+  id          String   @id @default(cuid())
+  employeeId  String
+  type        String   // "casual", "sick", "earned", "maternity", "paternity"
+  startDate   DateTime
+  endDate     DateTime
+  days        Float    // Number of leave days
+  reason      String?
+  status      String   @default("pending") // "pending", "approved", "rejected"
+  approvedBy  String?  // User ID who approved
+  approvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("leaves")
+}
+
+model Incentive {
+  id          String   @id @default(cuid())
+  employeeId  String
+  type        String   // "overtime", "bonus", "commission", "performance"
+  amount      Float
+  description String?
+  date        DateTime // When earned
+  month       Int?     // Payroll month
+  year        Int?     // Payroll year
+  processed   Boolean  @default(false) // Whether included in payroll
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("incentives")
+}
+
+model ComplianceRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  type       String   // "pf", "esi", "tds"
+  month      Int
+  year       Int
+  amount     Float
+  status     String   @default("pending") // "pending", "submitted", "approved"
+  reference  String?  // Government reference number
+  submittedAt DateTime?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, type, month, year])
+  @@map("compliance_records")
+}
+
+// Inventory & Stock Models
+model Product {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  sku         String?  @unique // Stock Keeping Unit
+  barcode     String?  @unique
+  category    String?
+  unit        String   @default("pcs") // "pcs", "kg", "liters", etc.
+  minStock    Float    @default(0) // Minimum stock level
+  maxStock    Float?   // Maximum stock level
+  reorderPoint Float?  // Point to trigger reorder
+  costPrice   Float    @default(0)
+  sellingPrice Float?  // For sales integration
+  location    String?  // Warehouse location
+  supplierId  String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier    Vendor?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  stockMovements StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  purchaseOrderItems PurchaseOrderItem[]
+  stockAlerts StockAlert[]
+
+  @@map("products")
+}
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  productId   String
+  type        String   // "in", "out", "adjustment", "transfer"
+  quantity    Float
+  unitPrice   Float?
+  totalValue  Float?
+  reference   String?  // Invoice number, order number, etc.
+  reason      String?  // "sale", "purchase", "damage", "theft", etc.
+  location    String?  // From/to location for transfers
+  performedBy String?  // User ID who performed the action
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("stock_movements")
+}
+
+model Vendor {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  contactPerson String?
+  email       String?
+  phone       String?
+  address     String?
+  gstin       String?
+  paymentTerms String? // "net_30", "net_60", etc.
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products    Product[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("vendors")
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  companyId   String
+  vendorId    String
+  orderNumber String   @unique
+  status      String   @default("draft") // "draft", "sent", "confirmed", "received", "cancelled"
+  orderDate   DateTime @default(now())
+  expectedDate DateTime?
+  totalAmount Float    @default(0)
+  notes       String?
+  createdBy   String?  // User ID who created
+  approvedBy  String?  // User ID who approved
+  approvedAt  DateTime?
+  sentAt      DateTime? // When email was sent
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vendor      Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  items       PurchaseOrderItem[]
+  products    Product[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Float
+  unitPrice   Float
+  totalAmount Float
+  receivedQty Float  @default(0)
+  status      String @default("pending") // "pending", "received", "cancelled"
+
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, productId])
+  @@map("purchase_order_items")
+}
+
+model StockAlert {
+  id        String   @id @default(cuid())
+  productId String
+  type      String   // "low_stock", "out_of_stock", "over_stock"
+  threshold Float?   // Stock level that triggered alert
+  currentStock Float?
+  message   String
+  status    String   @default("active") // "active", "resolved", "dismissed"
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("stock_alerts")
+}
+
+// ============================================================================
+// BUSINESS MODEL & MONETIZATION
+// ============================================================================
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String   @unique // "free", "starter", "pro", "premium_ai", "enterprise"
+  displayName String   // "Free Tier", "Starter", "Pro", etc.
+  description String?
+  price       Float    // Monthly price in INR
+  currency    String   @default("INR")
+  billingCycle String  @default("monthly") // "monthly", "yearly"
+  features    Json?    // Feature limits and capabilities
+  limits      Json?    // Usage limits (companies, invoices, etc.)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id            String    @id @default(cuid())
+  userId        String
+  planId        String
+  companyId     String?   // For company-specific subscriptions
+  status        String    @default("active") // "active", "cancelled", "expired", "past_due"
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  trialEnd      DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+  cancelledAt   DateTime?
+  metadata      Json?     // Additional subscription data
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan    Plan     @relation(fields: [planId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  payments Payment[]
+  usages   Usage[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  subscriptionId  String?
+  userId          String
+  amount          Float
+  currency        String   @default("INR")
+  status          String   @default("pending") // "pending", "completed", "failed", "refunded"
+  paymentMethod   String   // "razorpay", "phonepe", "bank_transfer", "wallet"
+  gatewayId       String?  // Payment gateway transaction ID
+  gatewayResponse Json?    // Full gateway response
+  description     String?
+  invoiceUrl      String?  // Generated invoice PDF URL
+  dueDate         DateTime?
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  refundAmount    Float?
+  metadata        Json?    // Additional payment data
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commissions   Commission[]
+
+  @@map("payments")
+}
+
+model Commission {
+  id          String   @id @default(cuid())
+  paymentId   String
+  type        String   // "upi_fee", "payout_commission", "subscription_referral", "reseller_margin"
+  amount      Float
+  percentage  Float?   // Commission percentage
+  description String?
+  status      String   @default("pending") // "pending", "paid", "cancelled"
+  paidAt      DateTime?
+  metadata    Json?    // Additional commission data
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("commissions")
+}
+
+model Addon {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String
+  description String
+  category    String   // "ai", "integration", "automation", "storage"
+  price       Float    // One-time or monthly price
+  currency    String   @default("INR")
+  billingType String   @default("one_time") // "one_time", "monthly", "yearly"
+  features    Json?    // What this addon provides
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchases AddonPurchase[]
+
+  @@map("addons")
+}
+
+model AddonPurchase {
+  id        String   @id @default(cuid())
+  userId    String
+  addonId   String
+  status    String   @default("active") // "active", "cancelled", "expired"
+  purchasedAt DateTime
+  expiresAt   DateTime?
+  metadata  Json?    // Purchase-specific data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addon Addon @relation(fields: [addonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, addonId])
+  @@map("addon_purchases")
+}
+
+model APIEndpoint {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  path        String   @unique
+  method      String   // "GET", "POST", "PUT", "DELETE"
+  description String
+  pricePerCall Float   @default(0) // Cost per API call in INR
+  currency    String   @default("INR")
+  rateLimit   Int?     // Requests per minute
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usages Usage[]
+
+  @@map("api_endpoints")
+}
+
+model Usage {
+  id            String   @id @default(cuid())
+  subscriptionId String?
+  userId        String
+  endpointId    String?
+  addonId       String?
+  action        String   // API endpoint called or feature used
+  quantity      Int      @default(1) // Number of units consumed
+  cost          Float    @default(0) // Cost incurred
+  metadata      Json?    // Additional usage data
+  createdAt     DateTime @default(now())
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint     APIEndpoint?  @relation(fields: [endpointId], references: [id], onDelete: SetNull)
+
+  @@map("usage")
+}
+
+model Reseller {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  companyName String
+  gstin       String?
+  pan         String?
+  contactPerson String
+  email       String
+  phone       String
+  address     String?
+  commission  Float    @default(20) // Percentage commission
+  status      String   @default("pending") // "pending", "approved", "rejected", "active", "suspended"
+  approvedAt  DateTime?
+  approvedBy  String?
+  metadata    Json?    // Additional reseller data
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whiteLabels WhiteLabel[]
+
+  @@map("resellers")
+}
+
+model WhiteLabel {
+  id          String   @id @default(cuid())
+  resellerId  String
+  domain      String   @unique
+  logoUrl     String?
+  brandName   String
+  brandColor  String?
+  customCSS   String?
+  isActive    Boolean  @default(false)
+  setupFee    Float    @default(5000) // One-time setup fee
+  monthlyFee  Float    @default(1000) // Monthly white-label fee
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reseller Reseller @relation(fields: [resellerId], references: [id], onDelete: Cascade)
+
+  @@map("white_labels")
+}
+
+model GatewayConfig {
+  id          String   @id @default(cuid())
+  gateway     String   @unique // "razorpay", "phonepe", "cashfree"
+  isActive    Boolean  @default(true)
+  config      Json     // Encrypted gateway configuration
+  testMode    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("gateway_configs")
+}
