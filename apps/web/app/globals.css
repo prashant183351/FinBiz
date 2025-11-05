@@ -1,15 +1,15 @@
-@tailwind base
-@tailwind components
-@tailwind utilities
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   html {
-    font-family: 'Inter', sans-serif
+    font-family: 'Inter', sans-serif;
   }
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors
+    @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors;
   }
 }

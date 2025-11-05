@@ -1,0 +1,26 @@
+
+
+> @finnbiz/web@0.1.0 dev /home/near/Desktop/FinBiz/apps/web
+> next dev
+
+  [1m[38;2;173;127;168m▲ Next.js 14.2.33[39m[22m
+  - Local:        http://localhost:3000
+
+ [32m[1m✓[22m[39m Starting...
+ [33m[1m⚠[22m[39m Invalid next.config.js options detected: 
+ [33m[1m⚠[22m[39m     Unrecognized key(s) in object: 'appDir' at "experimental"
+ [33m[1m⚠[22m[39m See more info here: https://nextjs.org/docs/messages/invalid-next-config
+ [32m[1m✓[22m[39m Ready in 2.7s
+ [37m[1m○[22m[39m Compiling / ...
+ [32m[1m✓[22m[39m Compiled / in 2.9s (455 modules)
+ [33m[1m⚠[22m[39m Unsupported metadata themeColor is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET / [32m200[39m in 3199ms
+ [32m[1m✓[22m[39m Compiled in 324ms (234 modules)
+ [37m[1m○[22m[39m Compiling /_not-found ...
+ [32m[1m✓[22m[39m Compiled /_not-found in 7.4s (444 modules)
+ [33m[1m⚠[22m[39m Unsupported metadata themeColor is configured in metadata export in /icon-192x192.png. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /icon-192x192.png [33m404[39m in 7697ms
+ [32m[1m✓[22m[39m Compiled in 243ms (441 modules)
+ [32m[1m✓[22m[39m Compiled in 140ms (441 modules)
